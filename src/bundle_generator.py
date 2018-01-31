@@ -16,7 +16,7 @@ class BundleGenerator:
     def __init__(self):
         print "Initializing BundleGenerator"
 
-        self.master_id = 0  # TODO make ros param
+        self.master_id = 9  # TODO make ros param
         self.marker_size = 4.75 / 100  # TODO make ros param
         self.optimize_id = -1
 
@@ -217,29 +217,6 @@ class BundleGenerator:
             markers[marker.id] = (standardize_pose(marker.pose.pose))
         self.raw_frame_buffer.append(markers)
 
-        try:
-
-            print "result {0}".format(compute_transform(markers[0], markers[1]))
-            print "marker 0 {0}".format(markers[0])
-            print "marker 1 {0}".format(markers[1])
-
-        except:
-            print "pass"
-
-
-        # try:
-        #     master_name = "ar_marker_0"
-        #     marker_name = "ar_marker_1"
-        #     trans_master = self.tfBuffer.lookup_transform("camera_rgb_optical_frame", master_name, rospy.Time.now(),rospy.Duration(1.0))
-        #     trans_marker = self.tfBuffer.lookup_transform("camera_rgb_optical_frame", marker_name, rospy.Time.now(),rospy.Duration(1.0))
-        #     trans = self.tfBuffer.lookup_transform(master_name, marker_name, rospy.Time.now(),rospy.Duration(1.0))
-        #     print "trans master {0}".format(trans_master)
-        #     print "trans marker {0}".format(trans_marker)
-        #     print "trans marker to master {0}".format(trans)
-        # except Exception as e:
-        #     print e
-
-
 def combine_transform(p1, p2):
     """
     Utility method for combining two transforms, adds translational component, and multiplies quaternions
@@ -300,8 +277,8 @@ def standardize_pose(pose):
 def main():
     gen = BundleGenerator()
     raw_input('Press Enter To Generate Bundle')
-    # gen.stop_record()
-    # gen.learn_pose()
+    gen.stop_record()
+    gen.learn_pose()
 
 if __name__ == '__main__':
     rospy.init_node(
