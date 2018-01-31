@@ -15,42 +15,57 @@ import xml.etree.cElementTree as ET
 class BundleGenerator:
     def __init__(self):
         print "Initializing BundleGenerator"
-        self.master_id = None
-        self.master_pose = None
+
+        self.master_id = 0  # TODO make ros param
+        self.marker_size = 4.75 / 100  # TODO make ros param
+        self.optimize_id = -1
+
+        self.raw_frame_buffer = []
         self.marker_buffer = {}
         self.optimized_marker_poses = {}
         self.point_locations = {}
 
         self.ar_sub = rospy.Subscriber("ar_pose_marker", AlvarMarkers, self.callback)
-        self.tfBuffer = tf2_ros.Buffer()
-        listener = tf2_ros.TransformListener(self.tfBuffer)
-        self.optimize_id = -1
-        self.marker_size = 4.75/100
+
         np.set_printoptions(suppress=True)
+        self.tfBuffer = tf2_ros.Buffer()  # DEBUG
+        listener = tf2_ros.TransformListener(self.tfBuffer)
 
         rospy.sleep(3)
         print "Finished Init BundleGenerator"
 
-    def add_marker_to_file(self,root, tag_id):
-        marker = ET.SubElement(root, "marker",index=str(tag_id),status=str(1))
+    
+    def add_marker_to_file(self, root, tag_id):
+        """
+        Add points for marker in counterclockwise order to xml tree
+        :param root: xml tree root
+        :param tag_id: tag id
+        """
+        marker = ET.SubElement(root, "marker", index=str(tag_id), status=str(1))
 
         for point in self.point_locations[tag_id]:
-            corner = ET.SubElement(marker,"corner", x = str(point[0]*100), y=str(point[1]*100), z=str(point[2]*100))
-            # corner.x, corner.y, corner.z = point
+            ET.SubElement(marker, "corner", x=str(point[0]*100), y=str(point[1]*100), z=str(point[2]*100))
 
     def create_bundle_file(self):
-        root = ET.Element("multimarker",markers=str(len(self.point_locations)))
+        """
+        Create xml tree and add each master, and each marker to tree
+        """
+        root = ET.Element("multimarker", markers=str(len(self.point_locations)))
 
-        self.add_marker_to_file(root,self.master_id)
+        self.add_marker_to_file(root, self.master_id)
 
         for marker_id in sorted(self.point_locations.keys()):
             if marker_id != self.master_id:
-                self.add_marker_to_file(root,marker_id)
+                self.add_marker_to_file(root, marker_id)
 
         tree = ET.ElementTree(root)
-        tree.write("test.xml")
-       
+        tree.write("test.xml")  # TODO change save location
+
     def points_from_pose(self,pose):
+        """
+        Calculate coordinates for corners of marker
+        :param pose: marker center coordinate
+        """
         p_bl = np.array(pose)
         p_bl[0] -= self.marker_size/2
         p_bl[1] -= self.marker_size/2
@@ -60,9 +75,12 @@ class BundleGenerator:
         p_tr[1] += self.marker_size
         p_tl = np.array(p_tr)
         p_tl[0] -= self.marker_size
-        return p_bl,p_br,p_tr,p_tl
+        return p_bl, p_br, p_tr, p_tl
 
     def generate_points(self):
+        """
+        Compute final coordinates for each marker based on optimized transforms
+        """
         for marker_id in sorted(self.optimized_marker_poses.keys()):
             pose = self.optimized_marker_poses[marker_id]
             rot = tf.transformations.euler_from_quaternion(pose[3:7])
@@ -70,104 +88,222 @@ class BundleGenerator:
             points = self.points_from_pose(pose)
             res = []
             for point in points:
-                dot = np.array([point[0],point[1],point[2],1]).T.dot(matrix)
+                dot = np.array([point[0], point[1], point[2], 1]).T.dot(matrix)
+                dot[2] = -dot[2]
                 res.append(dot[:3])
             self.point_locations[marker_id] = res
 
     def objF(self, x):
+        """
+        Blackbox optimization function, sums error relative to all transforms in marker buffer for both translation
+        and rotation
+        :param x:
+        """
         sum = 0
         for pose in self.marker_buffer[self.optimize_id]:
             sum += np.sum(np.square(np.subtract(x[0:4],pose[0:4])))
-            x_quat = Quaternion(x[6],x[3],x[4],x[5])
-            pose_quat = Quaternion(pose[6],pose[3],pose[4],pose[5])
-            dist = Quaternion.absolute_distance(x_quat,pose_quat)/3.14
-            sum += dist*dist 
+            x_quat = Quaternion(x[6], x[3], x[4], x[5])
+            pose_quat = Quaternion(pose[6], pose[3], pose[4], pose[5])
+            dist = Quaternion.absolute_distance(x_quat, pose_quat)/3.14
+            sum += dist*dist
         return sum
 
     def optimize_pose(self, marker_id, save_transform=True):
+        """
+        Find optimized transform for marker relative to master tag
+        :param marker_id: id for marker
+        :param save_transform: bool, update optimized marker pose dict or not
+        :return optimized pose
+        """
         x0 = np.zeros(7)
         self.optimize_id = marker_id
         l = CMAES(self.objF, x0)
         l.minimize = True
         l.maxEvaluations = 1000
         pose = l.learn()
-        print marker_id, pose #DEBUG
-        #TODO transform relative to master pose
+        print marker_id, pose  # DEBUG
         if save_transform:
-            self.optimized_marker_poses[marker_id] = compute_transform(self.master_pose, pose[0])
+            self.optimized_marker_poses[marker_id] = pose[0]
         return pose[0]
 
+    def transform_and_save_frames(self, frames, ref_tag_id=None, save=True):
+        """
+        Process list of frames, transform each pose relative to reference tag if given
+        If no reference tag is given, finds a reference tag with optimized transform to master for each frame
+        Returns list of skipped frames that didn't have reference tag
+        :param frames: list of frames to process
+        :param ref_tag_id: id for reference tag
+        :param save: bool, save optimized pose in optimized marker pose dict
+        :return: skipped frames
+        """
+        skipped_frames = []
+        for frame in frames:
+            if ref_tag_id is None:  # Find tag that has transform to master
+                for marker_id in frame.keys():
+                    if marker_id in self.optimized_marker_poses:
+                        ref_tag_id = marker_id
+
+            if ref_tag_id is not None and ref_tag_id in frame:
+                ref_tag_pose = frame[ref_tag_id]  # Pose of reference tag relative to camera
+                if ref_tag_id in self.optimized_marker_poses:
+                    ref_tag_transform = self.optimized_marker_poses[ref_tag_id]  # Transform from master to reference
+                else:
+                    ref_tag_transform = [0, 0, 0, 0, 0, 0, 1]  # If reference tag pose not found, use master transform
+
+                for marker_id, marker_pose in frame.iteritems():  # Compute transform for each marker and save
+                    marker_transform = compute_transform(ref_tag_pose, marker_pose)
+                    total_transform = combine_transform(ref_tag_transform, marker_transform)
+                    if marker_id in self.marker_buffer:
+                        self.marker_buffer[marker_id].append(total_transform)
+                    else:
+                        self.marker_buffer[marker_id] = [total_transform]
+
+                    # print "marker_transform from tag {0} to {1} is \n {2}".format((ref_tag_id, ref_tag_pose), (marker_id, marker_pose), marker_transform)
+                    # print "ref tag transform of tag {0} to master is \n {1}".format(ref_tag_id, ref_tag_transform)
+                    # print "total transform of tag {0} is \n {1}".format(marker_id, total_transform)
+
+            else:  # Skip frame because no reference tag in frame
+                skipped_frames.append(frame)
+        if save:  # Save positions in optimized marker pose dict
+            for marker_id in self.marker_buffer.keys():
+                self.optimize_pose(marker_id)
+
+        return skipped_frames
+
     def learn_pose(self):
-        self.master_id = find_max_count(self.marker_buffer)
-        self.master_pose = self.optimize_pose(self.master_id, save_transform=False)
-        print "master tag is {0}".format(self.master_id)
-        print "computer transform test {0}".format(compute_transform(self.master_pose,self.master_pose))
-        for marker_id in sorted(self.marker_buffer.keys()):
-            self.optimize_pose(marker_id)
-        print self.marker_buffer
-        print self.optimized_marker_poses #DEBUG
+        """
+        Entry function post recording frames, processes all frames that have master tag, then processing remaining
+        frames using other tags for reference
+        """
+        prev_len = -1  # Keep track of skipped frames to avoid infinite loop
+        skipped_frames = self.transform_and_save_frames(self.raw_frame_buffer, self.master_id)
+
+        print "skipped_frames count\n{0}".format(len(skipped_frames))
+
+        while len(skipped_frames) > 0 and len(skipped_frames) != prev_len:
+            prev_len = len(skipped_frames)
+            skipped_frames = self.transform_and_save_frames(skipped_frames)
+
+            print "skipped_frames count\n{0}".format(len(skipped_frames))
+
         self.generate_points()
         self.create_bundle_file()
 
     def stop_record(self):
+        """
+        Unregister subscriber to stop callbacks
+        """
         self.ar_sub.unregister()
 
     def callback(self, msg):
+        """
+        If more than 2 tags in message, save frame in raw frame buffer
+        :param msg: subscriber message
+        """
+        if rospy.is_shutdown():
+            self.stop_record()
+            sys.exit(1)
+            
         raw_markers = msg.markers
-        if len(raw_markers) < 1:
+        if len(raw_markers) < 2:
             return
-        print "callback" #DEBUG
+
+        # print msg.markers  # DEBUG
+
+        print "callback"  # DEBUG
+
+        markers = {}
         for marker in raw_markers:
-            if marker.id in self.marker_buffer:
-                self.marker_buffer[marker.id].append(standardize_pose(marker.pose.pose))
-            else:
-                self.marker_buffer[marker.id] = [standardize_pose(marker.pose.pose)]
+            markers[marker.id] = (standardize_pose(marker.pose.pose))
+        self.raw_frame_buffer.append(markers)
+
+        try:
+
+            print "result {0}".format(compute_transform(markers[0], markers[1]))
+            print "marker 0 {0}".format(markers[0])
+            print "marker 1 {0}".format(markers[1])
+
+        except:
+            print "pass"
+
+
+        # try:
+        #     master_name = "ar_marker_0"
+        #     marker_name = "ar_marker_1"
+        #     trans_master = self.tfBuffer.lookup_transform("camera_rgb_optical_frame", master_name, rospy.Time.now(),rospy.Duration(1.0))
+        #     trans_marker = self.tfBuffer.lookup_transform("camera_rgb_optical_frame", marker_name, rospy.Time.now(),rospy.Duration(1.0))
+        #     trans = self.tfBuffer.lookup_transform(master_name, marker_name, rospy.Time.now(),rospy.Duration(1.0))
+        #     print "trans master {0}".format(trans_master)
+        #     print "trans marker {0}".format(trans_marker)
+        #     print "trans marker to master {0}".format(trans)
+        # except Exception as e:
+        #     print e
+
+
+def combine_transform(p1, p2):
+    """
+    Utility method for combining two transforms, adds translational component, and multiplies quaternions
+    :param t1: transform 1
+    :param t2: transform 2
+    :return: resulting transform
+    """
+    r1 = tf.transformations.euler_from_quaternion(p1[3:7])
+    r2 = tf.transformations.euler_from_quaternion(p2[3:7])
+    m1 = tf.transformations.compose_matrix(translate=p1[0:3], angles=r1)
+    m2 = tf.transformations.compose_matrix(translate=p2[0:3], angles=r2)
+    res = m1.dot(m2)
+    scale, shear, angles, trans, persp = tf.transformations.decompose_matrix(res)
+    rot_quat = tf.transformations.quaternion_from_euler(*angles)
+    return trans.tolist() + rot_quat.tolist()
+
 
 def compute_transform(p1, p2):
-    res = np.zeros(7)
-    res[0:3] = p2[0:3]-p1[0:3]
-    p1[6] = -p1[6]
-    q2, q1 = Quaternion(p2[6],*p2[3:6]), Quaternion(p1[6],*p1[3:6])
-    res[3:7] = (q2/q1).elements
-    res[3], res[6] = res[6], res[3]
-    return res
+    """
+    Utility method for computing transform between two poses, subtracts translation, and divides quaternions
+    :param p1: pose 1
+    :param p2: pose 2
+    :return: resulting transform
+    """
+    r1 = tf.transformations.euler_from_quaternion(p1[3:7])
+    r2 = tf.transformations.euler_from_quaternion(p2[3:7])
+    m1 = tf.transformations.compose_matrix(translate=p1[0:3], angles=r1)
+    m2 = tf.transformations.compose_matrix(translate=p2[0:3], angles=r2)
+    res = np.linalg.inv(m1).dot(m2)
+    scale, shear, angles, trans, persp = tf.transformations.decompose_matrix(res)
+    rot_quat = tf.transformations.quaternion_from_euler(*angles)
+    return trans.tolist()+rot_quat.tolist()
 
-def find_max_count(dict):
-    max_count, max_id = -1,-1
-    for key,value in dict.iteritems():
-        if(len(value)>max_count):
+
+def find_max_count(data):
+    """
+    Utility function for finding element in dictionary with most items
+    :param data: dict
+    """
+    max_count, max_id = -1, -1
+    for key, value in data.iteritems():
+        if len(value) > max_count:
             max_id = key
             max_count = len(value)
     return max_id
 
+
 def standardize_pose(pose):
+    """
+    Convert geometry msgs pose to numpy array and standardize pose format
+    :param pose: geom msgs pose
+    :return: numpy array
+    """
     trans = pose.position
     orient = pose.orientation
-    angle = tf.transformations.euler_from_quaternion([
-    orient.x, orient.y, orient.z, orient.w])
-    euler_pose = [trans.x,trans.y,trans.z, degrees(angle[0]), degrees(angle[1]),degrees(angle[2])]
-    euler_pose = simplify_pose(euler_pose)
-    quat = tf.transformations.quaternion_from_euler(radians(euler_pose[3]), radians(euler_pose[4]), radians(euler_pose[5]))
-    return np.concatenate((np.array(euler_pose[0:3]), np.array([orient.x,orient.y,orient.z,orient.w])))
-
-def simplify_pose(pose):
-    # for i in range(0,3):
-    #     if(pose[i]<0):
-    #         pose[i] = -pose[i]
-    #         pose[i+3] = pose[i+3] + 180
-    for i in range(3,6):
-        while (pose[i]<0): pose[i]+=360
-    return pose
+    return np.array([trans.x, trans.y, trans.z, orient.x, orient.y, orient.z, orient.w])
 
 def main():
     gen = BundleGenerator()
-    raw_input('Press Enter To Exit')
-    gen.stop_record()
-    gen.learn_pose()
+    raw_input('Press Enter To Generate Bundle')
+    # gen.stop_record()
+    # gen.learn_pose()
 
 if __name__ == '__main__':
-    # First initialize moveit_commander and rospy.
-    # moveit_commander.roscpp_initialize(sys.argv)
     rospy.init_node(
         'ar_track_alvar_bundle_generator', anonymous=True)
     main()
