@@ -148,13 +148,27 @@ class BundleGenerator:
                 else:
                     self.marker_buffer[marker_id_1] = {marker_id_2:[compute_transform(pose1, pose2)]}
 
+        finished_list = [self.master_id]
         for marker_id in self.marker_buffer[self.master_id]:  #Optimize all with relation to master
             self.optimized_marker_poses[marker_id] = self.optimize_pose(self.master_id, marker_id)
-        # for marker_id_1, transforms in self.marker_buffer.iteritems():
-        #     for marker_id_2 in transforms:
-        #         if marker_id_1 == self.master_id:
-        #             self.optimized_marker_poses[marker_id_1] = self.optimize_pose(marker_id_1,marker_id_2)
-        #         else:
+            finished_list.append(marker_id)
+
+        self.marker_buffer.pop(self.master_id)
+        prev_len = len(self.marker_buffer.keys())
+        while len(self.marker_buffer.keys())>0 and prev_len != len(self.marker_buffer.keys()):
+            prev_len = len(self.marker_buffer.keys())
+            for marker_id_1, transforms in self.marker_buffer.iteritems():
+                if marker_id_1 not in finished_list:
+                    break
+                for marker_id_2 in transforms:
+                    if marker_id_2 not in finished_list:
+                        trans = combine_transform(self.optimized_marker_poses[marker_id_1], self.optimized_marker_poses[marker_id_2])
+                        self.optimized_marker_poses[marker_id_2] = trans
+                        finished_list.append(marker_id_2)
+                self.marker_buffer.pop(marker_id_1)
+
+                
+
 
     def learn_pose(self):
         """

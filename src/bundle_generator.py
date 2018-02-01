@@ -16,7 +16,7 @@ class BundleGenerator:
     def __init__(self):
         print "Initializing BundleGenerator"
 
-        self.master_id = 9  # TODO make ros param
+        self.master_id = 0  # TODO make ros param
         self.marker_size = 4.75 / 100  # TODO make ros param
         self.optimize_id = -1
 
