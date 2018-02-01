@@ -167,7 +167,7 @@ class BundleGenerator:
                         finished_list.append(marker_id_2)
                 self.marker_buffer.pop(marker_id_1)
 
-                
+        print self.optimized_marker_poses
 
 
     def learn_pose(self):
@@ -177,9 +177,6 @@ class BundleGenerator:
         """
         prev_len = -1  # Keep track of skipped frames to avoid infinite loop
         self.transform_and_save_frames(self.raw_frame_buffer, self.master_id)
-
-        
-
         self.generate_points()
         self.create_bundle_file()
 
