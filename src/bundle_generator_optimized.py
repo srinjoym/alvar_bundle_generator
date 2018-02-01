@@ -6,7 +6,7 @@ from geometry_msgs.msg import Pose
 import copy
 import tf2_ros
 import tf
-from math import degrees, radians
+from math import degrees, radians, pi
 from pybrain.optimization import CMAES
 import numpy as np
 from pyquaternion import Quaternion
@@ -106,8 +106,29 @@ class BundleGenerator:
             sum += np.sum(np.square(np.subtract(x[0:4],pose[0:4])))
             x_quat = Quaternion(x[6], x[3], x[4], x[5])
             pose_quat = Quaternion(pose[6], pose[3], pose[4], pose[5])
-            dist = Quaternion.absolute_distance(x_quat, pose_quat)/3.14
+            dist = Quaternion.absolute_distance(x_quat, pose_quat)/pi
             sum += dist*dist
+        return sum
+
+    def objF_global(self, x):
+        """
+        Blackbox optimization function, sums error relative to all transforms in marker buffer for both translation
+        and rotation
+        :param x:
+        """
+        x.shape = (self.row_count,7)
+        sum = 0
+        i = 0
+        for marker_id_1 in sorted(self.marker_buffer.keys()):
+            transforms = self.marker_buffer[marker_id_1]
+            for marker_id_2 in transforms:
+                for pose in self.marker_buffer[marker_id_1][marker_id_2]:
+                    sum += np.sum(np.square(np.subtract(x[i][0:4],pose[0:4])))
+                    x_quat = Quaternion(x[i][6], x[i][3], x[i][4], x[i][5])
+                    pose_quat = Quaternion(pose[6], pose[3], pose[4], pose[5])
+                    dist = Quaternion.absolute_distance(x_quat, pose_quat)/pi
+                    sum += dist*dist
+            i+=1
         return sum
 
     def optimize_pose(self, from_marker_id,to_marker_id, save_transform=True):
@@ -126,6 +147,30 @@ class BundleGenerator:
         pose = l.learn()
         print "optimized transfrom from {0} to {1} is {2}".format(from_marker_id,to_marker_id, pose)
         return pose[0]
+
+    def optimize_pose_global(self):
+        """
+        Find optimized transform for marker relative to master tag
+        :param marker_id: id for marker
+        :param save_transform: bool, update optimized marker pose dict or not
+        :return optimized pose
+        """
+        x = []
+        self.row_count = 0
+        for marker_id_1 in sorted(self.marker_buffer.keys()):
+            transforms = self.marker_buffer[marker_id_1]
+            for marker_id_2 in transforms:
+                average = np.mean(self.marker_buffer[marker_id_1][marker_id_2],axis=0) #use average as starting point in optimization
+                x.append(average)
+                self.row_count +=1
+        x0 = np.array(x)
+        print x0
+        l = CMAES(self.objF_global, x0)
+        l.minimize = True
+        l.maxEvaluations = 1000
+        pose = l.learn()
+        # pose.shape(self.row_count,7)
+        print "optimized transfrom is {0}".format(pose)
 
     def transform_and_save_frames(self, frames, ref_tag_id=None, save=True):
         """
@@ -148,8 +193,9 @@ class BundleGenerator:
                 else:
                     self.marker_buffer[marker_id_1] = {marker_id_2:[compute_transform(pose1, pose2)]}
 
-        for marker_id in self.marker_buffer[self.master_id]:  #Optimize all with relation to master
-            self.optimized_marker_poses[marker_id] = self.optimize_pose(self.master_id, marker_id)
+        # for marker_id in self.marker_buffer[self.master_id]:  #Optimize all with relation to master
+        #     self.optimized_marker_poses[marker_id] = self.optimize_pose(self.master_id, marker_id)
+        self.optimize_pose_global()
         # for marker_id_1, transforms in self.marker_buffer.iteritems():
         #     for marker_id_2 in transforms:
         #         if marker_id_1 == self.master_id:
