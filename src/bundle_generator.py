@@ -16,8 +16,8 @@ class BundleGenerator:
     def __init__(self):
         print "Initializing BundleGenerator"
 
-        self.master_id = 0  # TODO make ros param
-        self.marker_size = 4.75 / 100  # TODO make ros param
+        self.master_id = int(sys.argv[2])
+        self.marker_size = float(sys.argv[1]) / 100  # TODO make ros param
         self.optimize_id = -1
 
         self.raw_frame_buffer = []
@@ -189,12 +189,6 @@ class BundleGenerator:
         self.generate_points()
         self.create_bundle_file()
 
-    def stop_record(self):
-        """
-        Unregister subscriber to stop callbacks
-        """
-        self.ar_sub.unregister()
-
     def callback(self, msg):
         """
         If more than 2 tags in message, save frame in raw frame buffer
@@ -208,14 +202,18 @@ class BundleGenerator:
         if len(raw_markers) < 2:
             return
 
-        # print msg.markers  # DEBUG
-
         print "callback"  # DEBUG
 
         markers = {}
         for marker in raw_markers:
-            markers[marker.id] = (standardize_pose(marker.pose.pose))
+            markers[marker.id] = (standardize_pose(marker.pose.pose))  # convert to numpy array
         self.raw_frame_buffer.append(markers)
+
+    def stop_record(self):
+        """
+        Unregister subscriber to stop callbacks
+        """
+        self.ar_sub.unregister()
 
 def combine_transform(p1, p2):
     """
