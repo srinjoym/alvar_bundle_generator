@@ -2,7 +2,7 @@
 Automatically generates a bundle file based on tag locations for AR Track Alvar in ROS.
 
 ## Setup
-This package depends on a black box optimizater from PyBrain so that needs to be installed.
+This package depends on a black box optimizer from PyBrain so that needs to be installed.
 
 `pip install pybrain`
 
