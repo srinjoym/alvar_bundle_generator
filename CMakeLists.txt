@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(ar_track_alvar_bundle_generator)
+project(alvar_bundle_generator)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)

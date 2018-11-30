@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
-  <name>ar_track_alvar_bundle_generator</name>
-  <version>1.0.0</version>
+  <name>alvar_bundle_generator</name>
+  <version>1.0.1</version>
   <description>Generates bundle files from images for ar_track_alvar</description>
 
   <author email="srinjoy.majumdar@utexas.edu">Srinjoy Majumdar</author>
@@ -27,6 +27,10 @@
   <run_depend>message_runtime</run_depend>
   <run_depend>image_geometry</run_depend>
   <run_depend>image_transport</run_depend>
+  <!-- TODO: Add python packages to index so we can automatically install them -->
+  <!-- <run_depend>python-pybrain</run_depend>
+  <run_depend>python-pyquaternion</run_depend>
+  <run_depend>python-numpy</run_depend> -->
 
   <export>
   </export>

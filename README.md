@@ -1,4 +1,4 @@
-# ar_track_alvar_bundle_generator
+# alvar_bundle_generator
 Automatically generates a bundle file based on tag locations for AR Track Alvar in ROS.
 
 ## Setup
