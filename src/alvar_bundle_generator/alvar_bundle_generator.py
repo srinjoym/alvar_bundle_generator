@@ -19,7 +19,7 @@ class BundleGenerator:
         print "Initializing BundleGenerator"
 
         self.master_id = master_tag_id
-        self.marker_size = marker_size
+        self.marker_size = float(marker_size/100.0)
         self.optimize_id = -1
         self.frame_count = 0
 
