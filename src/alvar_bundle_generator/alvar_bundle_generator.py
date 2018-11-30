@@ -223,5 +223,6 @@ class BundleGenerator:
 def main():
     gen = BundleGenerator(float(sys.argv[1]), int(sys.argv[2]))
     raw_input('Press Enter To Generate Bundle')
-    gen.stop_record()
-    gen.learn_pose()
+    if (gen.frame_count < 25):
+        gen.stop_record()
+        gen.learn_pose()
