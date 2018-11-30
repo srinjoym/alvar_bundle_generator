@@ -213,7 +213,7 @@ class BundleGenerator:
         self.ar_sub.unregister()
 
 def main():
-    gen = BundleGenerator()
+    gen = BundleGenerator(sys.argv[1], sys.argv[2])
     raw_input('Press Enter To Generate Bundle')
     gen.stop_record()
     gen.learn_pose()

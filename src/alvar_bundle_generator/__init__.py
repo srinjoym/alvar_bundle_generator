@@ -10,7 +10,7 @@ def print_usage():
   print " master_tag_id: ID of tag that should be master in bundle file"
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 3:
       print_usage()
     else:
       rospy.init_node(
