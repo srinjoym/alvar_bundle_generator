@@ -13,6 +13,6 @@ pip install pybrain
 ## Running the package
 The script expects two arguments, the first is the tag size(in cm) and the second is the id of the tag you want to be the master.
 
-`roslaunch alvar_bundle_generator <tag_size> <master_tag_id>`
+`rosrun alvar_bundle_generator <tag_size> <master_tag_id>`
 
 After you get an appropriate number of images of the tags, press enter and the script will generate an xml file in the current directory.

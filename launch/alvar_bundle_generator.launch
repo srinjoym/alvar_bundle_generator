@@ -1,9 +1,0 @@
-<?xml version="1.0"?>
-
-<launch>
-  <arg name="marker_size" default="4.4"/>
-	<arg name="master_tag_id"/>
-
-
-	<node name="alvar_bundle_generator" pkg="alvar_bundle_generator" type="alvar_bundle_generator" output="screen" cwd="node" args="$(arg marker_size) $(arg master_tag_id)"></node>
-</launch>
