@@ -15,7 +15,7 @@ from ar_track_alvar_msgs.msg import AlvarMarkers, AlvarMarker
 from geometry_msgs.msg import Pose
 
 class BundleGenerator:
-    def __init__(self, master_tag_id, marker_size):
+    def __init__(self, marker_size, master_tag_id):
         print "Initializing BundleGenerator"
 
         self.master_id = master_tag_id
@@ -200,14 +200,14 @@ class BundleGenerator:
         if len(raw_markers) < 2:
             return
 
-        if self.frame_count > 5:
+        if self.frame_count >= 25:
             print "Reached Frame Limit, Generating Bundle File..."
             self.stop_record()
             self.learn_pose()
             return
 
         self.frame_count += 1
-        print "Recorded Frame " + str(self.frame_count) + "\n"
+        print "Recorded Frame " + str(self.frame_count)
 
         markers = {}
         for marker in raw_markers:
