@@ -18,9 +18,10 @@ class BundleGenerator:
     def __init__(self, master_tag_id, marker_size):
         print "Initializing BundleGenerator"
 
-        self.master_id = int(sys.argv[2])
-        self.marker_size = float(sys.argv[1]) / 100  # TODO make ros param
+        self.master_id = master_tag_id
+        self.marker_size = marker_size
         self.optimize_id = -1
+        self.frame_count = 0
 
         self.raw_frame_buffer = []
         self.marker_buffer = {}
@@ -175,13 +176,13 @@ class BundleGenerator:
         prev_len = -1  # Keep track of skipped frames to avoid infinite loop
         skipped_frames = self.transform_and_save_frames(self.raw_frame_buffer, self.master_id)
 
-        print "skipped_frames count\n{0}".format(len(skipped_frames))
+        print "Frames Left To Process \n{0}".format(len(skipped_frames))
 
         while len(skipped_frames) > 0 and len(skipped_frames) != prev_len:
             prev_len = len(skipped_frames)
             skipped_frames = self.transform_and_save_frames(skipped_frames)
 
-            print "skipped_frames count\n{0}".format(len(skipped_frames))
+            print "Frames Left To Process \n{0}".format(len(skipped_frames))
 
         self.generate_points()
         self.create_bundle_file()
@@ -199,7 +200,14 @@ class BundleGenerator:
         if len(raw_markers) < 2:
             return
 
-        print "callback"  # DEBUG
+        if self.frame_count > 5:
+            print "Reached Frame Limit, Generating Bundle File..."
+            self.stop_record()
+            self.learn_pose()
+            return
+
+        self.frame_count += 1
+        print f'Recorded Frame {self.frame_count}'
 
         markers = {}
         for marker in raw_markers:
