@@ -207,7 +207,7 @@ class BundleGenerator:
             return
 
         self.frame_count += 1
-        print f'Recorded Frame {self.frame_count}'
+        print "Recorded Frame " + self.frame_count + "\n"
 
         markers = {}
         for marker in raw_markers:
