@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+
+<launch>
+	<node name="alvar_bundle_generator" pkg="alvar_bundle_generator" type="alvar_bundle_generator" output="screen" cwd="node"></node>
+</launch>
